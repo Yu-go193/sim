@@ -3,54 +3,75 @@ open Int32
 
 (* シミュレーターの状態 *)
 type state = {
-  program : Verify.t ref;
-  label   : Label.t ref;
-  core    : Core.t ref;
+  program : Program.t ref;
+  verified : Verify.t ref;
+  label : Label.t ref;
+  core : Core.t ref;
 }
 
 (* グローバルの状態 *)
-let g = ref {
-    program = ref [||];
-    label=ref [];
-    core= ref (Core.empty ());
-  }
+let global = ref {
+  program = ref [||];
+  verified = ref [||];
+  label = ref [];
+  core = ref (Core.empty ());
+}
 
 let reset_all () =
-  g := {
+  global := {
     program = ref [||];
+    verified = ref [||];
     label=ref [];
     core= ref (Core.empty ());
   }
 
-let reset_core () = !g.core := Core.empty ()
+let reset_core () = !global.core := Core.empty ()
 
-let program g = !(!g.program)
-let core g = !(!g.core)
-let count g = !(!(!g.core).count)
-let pc g = to_int !(!(!g.core).pc)
+let label _ = !(!global.label)
+let program _ = !(!global.program)
+let verified _ = !(!global.verified)
+let core _ = !(!global.core)
+let count _ = !(!(!global.core).count)
+let pc _ = to_int !(!(!global.core).pc)
 
 (* プログラムを一行だけ実行する *)
-let execute_one_line () =
-  Sim.execute (core g) (program g).(pc g)
+let execute_n n =
+  for i=0 to n-1 do
+    Sim.execute (core ()) (verified ()).(pc ());
+  done;
+  (core ())
 
-(* 終了するまでプログラムを実行する *)
-let execute () =
-  (try while true
+(* 終了するまでプログラムを実行する/例外を出さない *)
+let execute_noexcept () =
+  (try
+     while true
      do
        (* ログを更新 *)
-       (core g).count := !((core g).count) + 1;
+       (core ()).count := !((core ()).count) + 1;
        (* 1行だけ実行する *)
-       execute_one_line ()
-     done with _ -> ()); (* Intex_error or ExecutionEnd *)
-  (core g)
+       ignore (execute_n 1)
+     done;
+   with _ -> ());
+  core ()
+
+(* 終了するまでプログラムを実行する/例外を出す *)
+let execute () =
+  while true
+  do
+    (* ログを更新 *)
+    (core ()).count := !((core ()).count) + 1;
+    (* 1行だけ実行する *)
+    ignore (execute_n 1)
+  done;
+  core ()
 
 (* レジスタのロード関連 *)
 (* 引数用レジスタにnumsをセットする *)
-let set_args = Core.set_args !g.core
-let set_register_name = Core.set_register_name !g.core
-let set_register_idx = Core.set_register_idx !g.core
-let dump_memory = Core.dump_memory !g.core
-let dump_memory_alist = Core.dump_memory_alist !g.core
+let set_args = Core.set_args !global.core
+let set_register_name = Core.set_register_name !global.core
+let set_register_idx = Core.set_register_idx !global.core
+let dump_memory = Core.dump_memory !global.core
+let dump_memory_alist = Core.dump_memory_alist !global.core
 
 (* プログラムのロード関連 *)
 let label_parse_file filename =
@@ -70,30 +91,54 @@ let parse_file filename =
   |> Parser.toplevel Lexer.main
 
 let load_file filename =
-  ParserArgs.label := label_parse_file filename;
-  !g.label := !ParserArgs.label;
-  !g.program := !(Verify.f (parse_file filename))
+  Label.global := label_parse_file filename;
+  !global.label := !Label.global;
+  !global.program := parse_file filename;
+  !global.verified := Verify.f (program ())
 
 let load_string str =
   (* 最後に改行がないとまずいので... *)
   let str = str ^ "\n" in
-  ParserArgs.label := label_parse_string str;
-  !g.label := !ParserArgs.label;
-  !g.program := !(Verify.f (parse_string str))
+  Label.global := label_parse_string str;
+  !global.label := !Label.global;
+  !global.program := parse_string str;
+  !global.verified := Verify.f (program ())
 
 (* コアの状態をリセットすることなくstrを実行する *)
 (* デバッグ用 *)
 let execute_string str =
   load_string str;
-  (core g).pc := of_int 0;
+  (core global).pc := of_int 0;
   execute ()
 
 let print_assembly () =
-  Asm.print_assembly (program g)
+  Asm.print_assembly (verified global)
 
 let string_of_assembly () =
-  Asm.string_of_assembly (program g)
+  Asm.string_of_assembly (verified global)
 
-let set_input str =
-  (core g).input_index := 0;
-  (core g).input_string := str
+let set_input_string str =
+  (core global).input_index := 0;
+  (core global).input_string := str
+
+let read_file filename =
+  let lines = ref [] in
+  let chan = open_in filename in
+  try
+    while true; do
+      lines := input_line chan :: !lines
+    done;
+    ""
+  with End_of_file ->
+    close_in chan;
+    let str = List.fold_left (fun x y -> x ^ "\n" ^ y) "" @@ List.rev !lines in
+    String.sub str 1 ((String.length str) - 1)
+
+let set_input_file filename =
+  (core global).input_index := 0;
+  (core global).input_string := read_file filename
+
+let print_label _ = Label.print_label (label ())
+let print_program _ = Program.print_program_with_label (program ()) (label ())
+let print_verified _ = Verify.print_verified (verified ())
+let print_core _ = Core.print_core (core ())

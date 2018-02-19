@@ -22,6 +22,7 @@ type t =
   | OpSlti
   | OpJump
   | OpJal
+  | OpJalr
   | OpJr
   | OpBne
   | OpBeq
@@ -82,6 +83,7 @@ let op_alist =
     ("slti", OpSlti);
     ("j", OpJump);
     ("jal", OpJal);
+    ("jalr", OpJalr);
     ("jr", OpJr);
     ("bne", OpBne);
     ("beq", OpBeq);
@@ -90,7 +92,7 @@ let op_alist =
     ("lwc1", OpLwc1);
     ("swc1", OpSwc1);
     ("lwc2", OpLwc2);
-    ("read_char", OpLwc2);
+    ("read_word", OpLwc2);
     ("swc2", OpSwc2);
     ("print_char", OpSwc2);
     ("addf", OpAddf);
@@ -123,6 +125,9 @@ let op_alist =
 (* op_alistの逆 *)
 let op_alist_rev =
   List.map (fun (x, y) -> (y, x)) op_alist
+
+let print_operator x =
+  Printf.printf "%6s" (List.assoc x op_alist_rev)
 
 (* op_strに対応するOperator.t型の値を返す *)
 let of_string op_str =

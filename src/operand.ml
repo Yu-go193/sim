@@ -9,6 +9,7 @@ type t =
   | Reg of reg
   | FReg of reg
   | Imm of imm
+  | Rabel of string
   | Dest of dest
   | RelReg of (imm * reg)
 
@@ -83,3 +84,12 @@ let regnum_of_string = function
   | "$fp" -> 30
   | "$ra" -> 31
   | str -> failwith @@ "invalid register name : " ^ str
+
+let print_operand = function
+  | Empty -> ()
+  | Reg i -> Printf.printf "%20s" (string_of_regnum (to_int i))
+  | FReg i -> Printf.printf "%20s" ("$f" ^ (string_of_int (to_int i)))
+  | Imm i -> Printf.printf "%20ld" i
+  | Rabel s -> Printf.printf "%20s" s
+  | Dest i -> Printf.printf "%20ld" i
+  | RelReg (i, j) -> Printf.printf "%9ld(%9ld)" i j
